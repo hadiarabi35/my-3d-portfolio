@@ -1,87 +1,160 @@
-import { Canvas, useFrame } from '@react-three/fiber'
-import { OrbitControls, Float, MeshDistortMaterial, Environment } from '@react-three/drei'
-import { useRef } from 'react'
+import { Canvas, useFrame, useThree } from '@react-three/fiber'
+import { OrbitControls, Float, MeshDistortMaterial, Environment, Sphere } from '@react-three/drei'
+import { useRef, useState } from 'react'
+import * as THREE from 'three'
 
-// تنظیمات ظاهری و حرکتی
+// تنظیمات
 const CONFIG = {
-  color: "#ffffffff",    // خاکستری تیره ست شده با متن شما
-  speed: 2.5,           // سرعت تغییر شکل (زنده بودن)
-  distort: 0.5,         // شدت دفرمه شدن فراکتالی
-  wireframeOpacity: 0.4 // میزان کمرنگ بودن خطوط برای مینیمال‌تر شدن
+  color: "#a0a0a0",
+  distort: 0.5,
+  speed: 3,
+  repulsionRadius: 5, // فاصله‌ای که از اونجا دافعه شروع میشه
+  repulsionForce: 0.8,  // قدرت پرت شدن به عقب
 }
 
-function LivingWireframe() {
+function InteractiveShape() {
   const meshRef = useRef()
+  const solidRef = useRef()
+  const lightRef = useRef()
+  
+  // دسترسی به اطلاعات سایز صفحه برای تبدیل مختصات موس
+  const { viewport } = useThree()
+  const [hovered, setHover] = useState(false)
 
-  useFrame(({ clock }) => {
-    const t = clock.getElapsedTime()
+  useFrame((state) => {
+    const { mouse } = state;
+    
+    // =============================================
+    // 1. محاسبات مربوط به نورِ دنبال‌کننده (Spot Effect)
+    // =============================================
+    // تبدیل مختصات 2 بعدی موس به مختصات 3 بعدی جهان
+    const x = (mouse.x * viewport.width) / 2
+    const y = (mouse.y * viewport.height) / 2
+    
+    if (lightRef.current) {
+      // نور دقیقا روی موس حرکت می‌کند اما کمی جلوتر (z=2) تا روی سطح بتابد
+      lightRef.current.position.set(x, y, 2)
+    }
+
+    // =============================================
+    // 2. محاسبات مربوط به دافعه (Repulsion)
+    // =============================================
     if (meshRef.current) {
-      // چرخش بسیار آرام برای نمایش بهتر ابعاد وایرفریم
-      meshRef.current.rotation.y = t * 0.15
+      // موقعیت فعلی موس در فضای سه بعدی
+      const mousePos = new THREE.Vector3(x, y, 0)
+      // موقعیت فعلی آبجکت (بدون در نظر گرفتن جابجایی دافعه قبلی برای محاسبه دقیق‌تر)
+      const objectPos = new THREE.Vector3(0, 0, 0) 
+      
+      // محاسبه فاصله موس تا مرکز آبجکت
+      const distance = mousePos.distanceTo(objectPos)
+      
+      // بردار هدف برای جابجایی
+      let targetPos = new THREE.Vector3(0, 0, 0)
+
+      // اگر موس خیلی نزدیک شد (وارد شعاع خطر شد)
+      if (distance < CONFIG.repulsionRadius) {
+        // جهت بردار: از موس به سمت آبجکت (یعنی هل دادن به مخالف)
+        const direction = objectPos.sub(mousePos).normalize()
+        // شدت دافعه بر اساس نزدیکی (هرچی نزدیک‌تر، شدت بیشتر)
+        const intensity = (5 - distance / CONFIG.repulsionRadius) * CONFIG.repulsionForce
+        
+        targetPos = direction.multiplyScalar(intensity)
+      }
+
+      // اعمال حرکت نرم (Lerp) برای اینکه پرش ناگهانی نداشته باشد
+      meshRef.current.position.lerp(targetPos, 0.05)
+      
+      // چرخش آرام همیشگی
+      meshRef.current.rotation.x += 0.004
+      meshRef.current.rotation.y += 0.005
     }
   })
 
   return (
-    <mesh ref={meshRef}>
-      {/* استفاده از Icosahedron با جزئیات بالا (Detail 15) 
-        باعث می‌شود خطوط مثلثی بسیار ظریف و متراکمی داشته باشیم
-      */}
-      <icosahedronGeometry args={[1.6, 15]} />
-      
-      <MeshDistortMaterial
-        color={CONFIG.color}
-        wireframe={true}           // تبدیل حجم به خطوط وایرفریم
-        transparent={true}
-        opacity={CONFIG.wireframeOpacity}
-        speed={CONFIG.speed}
-        distort={CONFIG.distort}
-        radius={1}
+    <group ref={meshRef}>
+      {/* نور نقطه‌ای که فقط اطراف موس را روشن می‌کند */}
+      <pointLight 
+        ref={lightRef} 
+        distance={5} // شعاع نور کم است تا فقط یک نقطه روشن شود
+        decay={4} 
+        intensity={6} 
+        color="#ffffff" 
       />
-    </mesh>
+
+      {/* لایه دوم: وایرفریم بیرونی */}
+      <mesh 
+        onPointerOver={() => setHover(true)}
+        onPointerOut={() => setHover(false)}
+      >
+        <icosahedronGeometry args={[1.6, 15]} />
+        <MeshDistortMaterial
+          color={CONFIG.color}
+          wireframe={true}
+          transparent={true}
+          opacity={0.3} // کمی شفاف‌تر برای دیدن سطح زیرین
+          speed={CONFIG.speed}
+          distort={CONFIG.distort}
+          radius={1}
+        />
+      </mesh>
+    </group>
   )
 }
 
 function App() {
   return (
-    <div style={{ width: '100vw', height: '100vh', background: '#d8d7d7ff', position: 'relative' }}>
+    <div style={{ width: '100vw', height: '100vh', background: '#d8d7d7', position: 'relative', cursor: 'crosshair' }}>
       
-      {/* بخش متن با مشخصات دقیق شما */}
-      <div style={{
+      {/* متن */}
+       <div style={{
+
         position: 'absolute',
+
         top: '80%',
+
         left: '50%',
+
         transform: 'translate(-50%, -50%)',
+
         textAlign: 'center',
+
         zIndex: 1,
+
         pointerEvents: 'none',
+
         width: '100%'
+
       }}>
+
         <h1 style={{ color: '#535353ff', fontSize: '0.8rem', letterSpacing: '5px', margin: 0, fontWeight: '500' }}>
+
           CRAFTING THE EXPERIENCE
+
         </h1>
+
         <p style={{ color: '#535353ff', fontSize: '0.55rem', letterSpacing: '3.3px', marginTop: '10px' }}>
+
           A NEW DIGITAL SPACE IS UNDER DESIGN
+
         </p>
+
       </div>
 
-      {/* بخش سه‌بعدی */}
-      <Canvas camera={{ position: [0, -0, 5], fov: 45 }}>
-        <ambientLight intensity={1.5} />
-        <pointLight position={[10, 10, 10]} intensity={1} />
-        
-        {/* Environment باعث ایجاد انعکاس‌های جزیی روی خطوط می‌شود */}
-        <Environment preset="city" />
 
-        <Float speed={2} rotationIntensity={2} floatIntensity={5}>
-          <LivingWireframe />
+
+      <Canvas camera={{ position: [0, 0, 6], fov: 45 }}>
+        {/* نور محیطی کم برای اینکه سایه‌ها عمیق باشند */}
+        <ambientLight intensity={0.5} />
+        
+        {/* این Environment برای انعکاس روی وایرفریم‌ها عالی است */}
+        <Environment preset="warehouse" />
+
+        <Float speed={1.5} rotationIntensity={0.2} floatIntensity={1}>
+          <InteractiveShape />
         </Float>
 
-        <OrbitControls 
-          enableZoom={true} 
-          autoRotate={true} 
-          autoRotateSpeed={4} 
-          enableDamping={true}
-        />
+        {/* غیرفعال کردن زوم و پن برای تمرکز روی افکت موس */}
+        <OrbitControls enableZoom={false} enablePan={false} enableRotate={false} />
       </Canvas>
     </div>
   )
