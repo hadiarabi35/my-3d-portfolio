@@ -71,7 +71,7 @@ function InteractiveShape({ isMobile, gyroData }) {
       lightRef.current.position.lerp(new THREE.Vector3(finalX * 3, finalY * 3, 5), 0.1)
       
       // حرکت نرم جسم
-      meshRef.current.position.lerp(targetPos, 0.03)
+      meshRef.current.position.lerp(targetPos, 0.017)
     } 
     // ==========================================
     // حالت دسکتاپ (موس و دافعه)
@@ -102,7 +102,7 @@ function InteractiveShape({ isMobile, gyroData }) {
             )
         }
       }
-      meshRef.current.position.lerp(targetPos, 0.05)
+      meshRef.current.position.lerp(targetPos, 0.015)
     }
 
     // انیمیشن چرخش همیشگی
