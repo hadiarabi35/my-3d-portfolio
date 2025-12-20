@@ -3,7 +3,7 @@ import { OrbitControls, Float, MeshDistortMaterial, Environment } from '@react-t
 import { useRef, useState, useEffect } from 'react'
 import * as THREE from 'three'
 
-// تنظیمات رفتار
+// تنظیمات رفتار (رنگ، سرعت، حساسیت‌ها)
 const CONFIG = {
   color: "#a0a0a0",
   distort: 0.5,
@@ -11,18 +11,24 @@ const CONFIG = {
   repulsionRadius: 5,
   repulsionForce: 0.8,
   
-  // --- تنظیمات موبایل ---
-  gyroSensitivity: 0.05,  // حساسیت ژیروسکوپ (لرزش با تکان گوشی)
-  touchSensitivity: 1.5,  // حساسیت تاچ (مقدار جابجایی با انگشت)
-  maxMobileMove: 2.5,     // جسم هرگز از این محدوده خارج نمی‌شود (چه با تاچ چه با ژیروسکوپ)
+  // --- تنظیمات اختصاصی موبایل ---
+  gyroSensitivity: 0.05,  // حساسیت ژیروسکوپ
+  touchSensitivity: 1.5,  // حساسیت تاچ
+  maxMobileMove: 2.5,     // دامنه حرکت مجاز در موبایل
 }
 
-// تنظیمات پوزیشن و سایز
+// تنظیمات مکانی (کاملاً تفکیک شده)
 const TRANSFORM = {
-  position: [0, 0, -57],
-  rotation: [0, 0, 2.5],
-  scaleDesktop: 20,
-  scaleMobile: 11,
+  desktop: {
+    position: [0, 0, -57],
+    rotation: [0, 0, 2.5],
+    scale: 20
+  },
+  mobile: {
+    position: [0, 0, -57], // پوزیشن مشابه ویندوز (قابل تغییر مستقل)
+    rotation: [0, 0, 2.5], // روتیشن مشابه ویندوز
+    scale: 11              // اسکیل متفاوت برای موبایل
+  }
 }
 
 function InteractiveShape({ isMobile, gyroData }) {
@@ -30,7 +36,8 @@ function InteractiveShape({ isMobile, gyroData }) {
   const lightRef = useRef()
   const { viewport } = useThree()
   
-  const currentScale = isMobile ? TRANSFORM.scaleMobile : TRANSFORM.scaleDesktop
+  // انتخاب کانفیگ صحیح بر اساس نوع دستگاه
+  const currentTransform = isMobile ? TRANSFORM.mobile : TRANSFORM.desktop
 
   useFrame((state) => {
     if (!meshRef.current || !lightRef.current) return
@@ -38,36 +45,32 @@ function InteractiveShape({ isMobile, gyroData }) {
     let targetPos = new THREE.Vector3(0, 0, 0)
 
     // ==========================================
-    // حالت موبایل (ترکیب ژیروسکوپ + تاچ نرم)
+    // حالت موبایل (ژیروسکوپ + تاچ + محدودیت حرکت)
     // ==========================================
     if (isMobile) {
       let finalX = 0
       let finalY = 0
 
-      // 1. محاسبه اثر ژیروسکوپ (کد قبلی)
+      // 1. اثر ژیروسکوپ
       if (gyroData.current) {
         finalX += gyroData.current.gamma * CONFIG.gyroSensitivity
         finalY += (gyroData.current.beta - 45) * CONFIG.gyroSensitivity
       }
 
-      // 2. محاسبه اثر تاچ (کد جدید)
-      // state.pointer موقعیت انگشت را بین -1 تا 1 می‌دهد
-      // ما آن را در حساسیت ضرب می‌کنیم تا میزان جابجایی مشخص شود
+      // 2. اثر تاچ (انگشت)
       finalX += state.pointer.x * CONFIG.touchSensitivity
       finalY += state.pointer.y * CONFIG.touchSensitivity
 
       // 3. محدود کردن حرکت (Clamp)
-      // این خط تضمین می‌کند که مجموع تاچ و ژیروسکوپ، جسم را از کادر خارج نکند
       finalX = THREE.MathUtils.clamp(finalX, -CONFIG.maxMobileMove, CONFIG.maxMobileMove)
       finalY = THREE.MathUtils.clamp(finalY, -CONFIG.maxMobileMove, CONFIG.maxMobileMove)
 
       targetPos.set(finalX, finalY, 0)
       
-      // حرکت نور هم ترکیبی باشد
+      // حرکت نور ترکیبی
       lightRef.current.position.lerp(new THREE.Vector3(finalX * 3, finalY * 3, 5), 0.1)
       
-      // *** نکته کلیدی برای نرمی ***
-      // عدد 0.03 باعث می‌شود حرکت بسیار سنگین و نرم (Smooth) باشد
+      // حرکت نرم جسم
       meshRef.current.position.lerp(targetPos, 0.03)
     } 
     // ==========================================
@@ -80,8 +83,9 @@ function InteractiveShape({ isMobile, gyroData }) {
       
       lightRef.current.position.set(x, y, 2)
 
-      const relativeMouseX = x - TRANSFORM.position[0]
-      const relativeMouseY = y - TRANSFORM.position[1]
+      // محاسبه فاصله نسبت به پوزیشن دسکتاپ
+      const relativeMouseX = x - currentTransform.position[0]
+      const relativeMouseY = y - currentTransform.position[1]
       const distance = Math.sqrt(relativeMouseX**2 + relativeMouseY**2)
       
       if (distance < CONFIG.repulsionRadius) {
@@ -108,9 +112,9 @@ function InteractiveShape({ isMobile, gyroData }) {
 
   return (
     <group 
-      position={TRANSFORM.position} 
-      rotation={TRANSFORM.rotation} 
-      scale={currentScale} 
+      position={currentTransform.position} 
+      rotation={currentTransform.rotation} 
+      scale={currentTransform.scale} 
     >
       <pointLight 
         ref={lightRef} 
@@ -219,7 +223,6 @@ function App() {
           <InteractiveShape isMobile={isMobile} gyroData={gyroData} />
         </Float>
 
-        {/* غیرفعال کردن کنترل‌های پیش‌فرض تاچ */}
         <OrbitControls enabled={false} />
       </Canvas>
     </div>
