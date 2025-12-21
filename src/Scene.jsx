@@ -105,7 +105,7 @@ export default function Scene({ objectColor, isHolding }) {
               color={objectColor || CONFIG.defaultColor}
               wireframe={true}
               transparent={true}
-              opacity={0.8}
+              opacity={0.1}
               distort={CONFIG.normalDistort}
               speed={CONFIG.normalSpeed}
               roughness={CONFIG.roughness}

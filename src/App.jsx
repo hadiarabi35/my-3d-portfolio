@@ -120,7 +120,7 @@ export default function App() {
               Exploring the boundaries between digital interfaces and organic motion. Hold click to transcend.
             </p>
           </section>
-
+          
           {/* SECTION 2: Text Content */}
           <section style={{ padding: '100px 0', pointerEvents: 'auto', textAlign: 'justify' }}>
             <h2 style={{ fontSize: '1.8rem', fontWeight: '300', marginBottom: '40px' }}>The Concept</h2>
@@ -130,6 +130,87 @@ export default function App() {
             <p style={{ fontSize: '1rem', lineHeight: '1.8', fontWeight: '300', opacity: 0.9 }}>
               We believe in "Invisible Design". Design that works so well you don't even notice it's there. It's about the feeling, the motion, and the subtle feedback loops that create an immersive experience without shouting for attention.
             </p>
+            {/* داخل بخش Concept */}
+            <div style={{ 
+              marginTop: '60px', 
+              width: '100%', 
+              overflow: 'hidden', 
+              borderRadius: '4px', // لبه‌های کمی گرد برای حس مدرن
+              backgroundColor: 'rgba(0,0,0,0.05)' // یک رنگ موقت تا عکس لود شود
+            }}>
+              <img 
+                src="https://images.unsplash.com/photo-1494438639946-1ebd1d20bf85?auto=format&fit=crop&w=1200&q=80" 
+                alt="Minimal Interior"
+                style={{
+                  width: '100%',
+                  height: 'auto',
+                  display: 'block',
+                  filter: `grayscale(${1 - scrollProgress})`, // نکته آموزشی: با اسکرول عکس رنگی می‌شود!
+                  transition: 'filter 0.5s ease'
+                }}
+              />
+            </div>
+                        {/* داخل بخش Concept */}
+            <div style={{ 
+              marginTop: '60px', 
+              width: '100%', 
+              overflow: 'hidden', 
+              borderRadius: '4px', // لبه‌های کمی گرد برای حس مدرن
+              backgroundColor: 'rgba(0,0,0,0.05)' // یک رنگ موقت تا عکس لود شود
+            }}>
+              <img 
+                src="https://images.unsplash.com/photo-1494438639946-1ebd1d20bf85?auto=format&fit=crop&w=1200&q=80" 
+                alt="Minimal Interior"
+                style={{
+                  width: '100%',
+                  height: 'auto',
+                  display: 'block',
+                  filter: `grayscale(${1 - scrollProgress})`, // نکته آموزشی: با اسکرول عکس رنگی می‌شود!
+                  transition: 'filter 0.5s ease'
+                }}
+              />
+            </div>
+ {/* داخل بخش Concept */}
+            <div style={{ 
+              marginTop: '60px', 
+              width: '100%', 
+              overflow: 'hidden', 
+              borderRadius: '4px', // لبه‌های کمی گرد برای حس مدرن
+              backgroundColor: 'rgba(0,0,0,0.05)' // یک رنگ موقت تا عکس لود شود
+            }}>
+              <img 
+                src="https://images.unsplash.com/photo-1494438639946-1ebd1d20bf85?auto=format&fit=crop&w=1200&q=80" 
+                alt="Minimal Interior"
+                style={{
+                  width: '100%',
+                  height: 'auto',
+                  display: 'block',
+                  filter: `grayscale(${1 - scrollProgress})`, // نکته آموزشی: با اسکرول عکس رنگی می‌شود!
+                  transition: 'filter 0.5s ease'
+                }}
+              />
+            </div>
+                        {/* داخل بخش Concept */}
+            <div style={{ 
+              marginTop: '60px', 
+              width: '100%', 
+              overflow: 'hidden', 
+              borderRadius: '4px', // لبه‌های کمی گرد برای حس مدرن
+              backgroundColor: 'rgba(0,0,0,0.05)' // یک رنگ موقت تا عکس لود شود
+            }}>
+              <img 
+                src="https://images.unsplash.com/photo-1494438639946-1ebd1d20bf85?auto=format&fit=crop&w=1200&q=80" 
+                alt="Minimal Interior"
+                style={{
+                  width: '100%',
+                  height: 'auto',
+                  display: 'block',
+                  filter: `grayscale(${1 - scrollProgress})`, // نکته آموزشی: با اسکرول عکس رنگی می‌شود!
+                  transition: 'filter 0.5s ease'
+                }}
+              />
+            </div>
+
           </section>
 
           {/* SECTION 3: Services / Details */}
