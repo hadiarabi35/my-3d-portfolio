@@ -1,232 +1,254 @@
-import { Canvas, useFrame, useThree } from '@react-three/fiber'
-import { OrbitControls, Float, MeshDistortMaterial, Environment } from '@react-three/drei'
-import { useRef, useState, useEffect } from 'react'
-import * as THREE from 'three'
+import Scene from './Scene' 
+import React, { useState, useRef } from 'react'
+import { Canvas } from '@react-three/fiber'
+import TransitionEffect from './TransitionEffect'
 
-// تنظیمات رفتار (رنگ، سرعت، حساسیت‌ها)
-const CONFIG = {
-  color: "#a0a0a0",
-  distort: 0.5,
-  speed: 3,
-  repulsionRadius: 5,
-  repulsionForce: 0.8,
-  
-  // --- تنظیمات اختصاصی موبایل ---
-  gyroSensitivity: 0.05,  // حساسیت ژیروسکوپ
-  touchSensitivity: 1.5,  // حساسیت تاچ
-  maxMobileMove: 3.5,     // دامنه حرکت مجاز در موبایل
-}
-
-// تنظیمات مکانی (کاملاً تفکیک شده)
-const TRANSFORM = {
-  desktop: {
-    position: [0, 0, -57],
-    rotation: [0, 0, 2.5],
-    scale: 20
-  },
-  mobile: {
-    position: [0, 0, 0 ], // پوزیشن مشابه ویندوز (قابل تغییر مستقل)
-    rotation: [0, 0, 25], // روتیشن مشابه ویندوز
-    scale: 1              // اسکیل متفاوت برای موبایل
-  }
-}
-
-function InteractiveShape({ isMobile, gyroData }) {
-  const meshRef = useRef()
-  const lightRef = useRef()
-  const { viewport } = useThree()
-  
-  // انتخاب کانفیگ صحیح بر اساس نوع دستگاه
-  const currentTransform = isMobile ? TRANSFORM.mobile : TRANSFORM.desktop
-
-  useFrame((state) => {
-    if (!meshRef.current || !lightRef.current) return
-
-    let targetPos = new THREE.Vector3(0, 0, 0)
-
-    // ==========================================
-    // حالت موبایل (ژیروسکوپ + تاچ + محدودیت حرکت)
-    // ==========================================
-    if (isMobile) {
-      let finalX = 0
-      let finalY = 0
-
-      // 1. اثر ژیروسکوپ
-      if (gyroData.current) {
-        finalX += gyroData.current.gamma * CONFIG.gyroSensitivity
-        finalY += (gyroData.current.beta - 45) * CONFIG.gyroSensitivity
-      }
-
-      // 2. اثر تاچ (انگشت)
-      finalX += state.pointer.x * CONFIG.touchSensitivity
-      finalY += state.pointer.y * CONFIG.touchSensitivity
-
-      // 3. محدود کردن حرکت (Clamp)
-      finalX = THREE.MathUtils.clamp(finalX, -CONFIG.maxMobileMove, CONFIG.maxMobileMove)
-      finalY = THREE.MathUtils.clamp(finalY, -CONFIG.maxMobileMove, CONFIG.maxMobileMove)
-
-      targetPos.set(finalX, finalY, 0)
-      
-      // حرکت نور ترکیبی
-      lightRef.current.position.lerp(new THREE.Vector3(finalX * 3, finalY * 3, 5), 0.1)
-      
-      // حرکت نرم جسم
-      meshRef.current.position.lerp(targetPos, 0.017)
-    } 
-    // ==========================================
-    // حالت دسکتاپ (موس و دافعه)
-    // ==========================================
-    else {
-      const { mouse } = state
-      const x = (mouse.x * viewport.width) / 2
-      const y = (mouse.y * viewport.height) / 2
-      
-      lightRef.current.position.set(x, y, 2)
-
-      // محاسبه فاصله نسبت به پوزیشن دسکتاپ
-      const relativeMouseX = x - currentTransform.position[0]
-      const relativeMouseY = y - currentTransform.position[1]
-      const distance = Math.sqrt(relativeMouseX**2 + relativeMouseY**2)
-      
-      if (distance < CONFIG.repulsionRadius) {
-        const dirX = -relativeMouseX
-        const dirY = -relativeMouseY
-        const length = Math.sqrt(dirX**2 + dirY**2)
-
-        if (length > 0) {
-            const intensity = (4 - distance / CONFIG.repulsionRadius) * CONFIG.repulsionForce
-            targetPos.set(
-                (dirX / length) * intensity, 
-                (dirY / length) * intensity, 
-                0
-            )
-        }
-      }
-      meshRef.current.position.lerp(targetPos, 0.015)
-    }
-
-    // انیمیشن چرخش همیشگی
-    meshRef.current.rotation.x += 0.004
-    meshRef.current.rotation.y += 0.005
-  })
-
+// --- صفحه دنیای جدید (بعد از ترنزیشن) ---
+function NewWorldPage({ onBack }) {
   return (
-    <group 
-      position={currentTransform.position} 
-      rotation={currentTransform.rotation} 
-      scale={currentTransform.scale} 
-    >
-      <pointLight 
-        ref={lightRef} 
-        distance={10} 
-        decay={2} 
-        intensity={6} 
-        color="#ffffff" 
-      />
-
-      <group ref={meshRef}>
-        <mesh>
-          <icosahedronGeometry args={[1.6, 15]} />
-          <MeshDistortMaterial
-            color={CONFIG.color}
-            wireframe={true}
-            transparent={true}
-            opacity={0.3}
-            speed={CONFIG.speed}
-            distort={CONFIG.distort}
-            radius={1}
-          />
-        </mesh>
-      </group>
-    </group>
-  )
-}
-
-function App() {
-  const [isMobile, setIsMobile] = useState(false)
-  const [permissionGranted, setPermissionGranted] = useState(false)
-  const gyroData = useRef({ gamma: 0, beta: 0 })
-
-  useEffect(() => {
-    // تشخیص موبایل
-    const checkMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent)
-    setIsMobile(checkMobile)
-
-    const handleOrientation = (event) => {
-      gyroData.current = {
-        gamma: event.gamma || 0,
-        beta: event.beta || 0
-      }
-    }
-
-    if (checkMobile && permissionGranted) {
-      window.addEventListener('deviceorientation', handleOrientation)
-    }
-
-    return () => {
-      window.removeEventListener('deviceorientation', handleOrientation)
-    }
-  }, [permissionGranted])
-
-  const requestAccess = () => {
-    if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
-      DeviceOrientationEvent.requestPermission()
-        .then((response) => {
-          if (response === 'granted') setPermissionGranted(true)
-        })
-        .catch(console.error)
-    } else {
-      setPermissionGranted(true)
-    }
-  }
-
-  return (
-    <div style={{ width: '100vw', height: '100vh', background: '#d8d7d7', position: 'relative', overflow: 'hidden' }}>
-      
-      {/* دکمه ورود مخصوص موبایل */}
-      {isMobile && !permissionGranted && (
-        <div style={{
-          position: 'absolute', zIndex: 10, top: 0, left: 0, width: '100%', height: '100%',
-          background: 'rgba(216, 215, 215, 0.95)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center'
-        }}>
-           <h2 style={{color: '#333', fontSize: '1rem', marginBottom: '20px', letterSpacing: '2px'}}>IMMERSIVE EXPERIENCE</h2>
-          <button 
-            onClick={requestAccess}
-            style={{
-              padding: '15px 40px', background: '#222', color: '#fff', border: 'none',
-              fontSize: '0.9rem', letterSpacing: '3px', cursor: 'pointer', borderRadius: '0px'
-            }}
-          >
-            ENTER
-          </button>
-        </div>
-      )}
-
-      {/* متن‌ها */}
-      <div style={{
-        position: 'absolute', top: '80%', left: '50%', transform: 'translate(-50%, -50%)',
-        textAlign: 'center', zIndex: 1, pointerEvents: 'none', width: '100%'
+    <div style={{ 
+      width: '100vw', height: '100vh', 
+      background: '#000', color: '#fff', 
+      display: 'flex', flexDirection: 'column',
+      alignItems: 'center', justifyContent: 'center',
+      animation: 'fadeIn 1s ease', zIndex: 2000, position: 'relative',
+      fontFamily: 'sans-serif'
+    }}>
+      <h1 style={{ fontSize: '3rem', fontWeight: '200', letterSpacing: '5px' }}>THE VOID</h1>
+      <p style={{ marginTop: '20px', opacity: 0.7, fontWeight: '300' }}>Welcome to the next dimension.</p>
+      <button onClick={onBack} style={{ 
+        marginTop: '40px', padding: '12px 30px', 
+        background: 'transparent', border: '1px solid rgba(255,255,255,0.5)', 
+        color: 'white', cursor: 'pointer', borderRadius: '50px' 
       }}>
-        <h1 style={{ color: '#535353ff', fontSize: '0.8rem', letterSpacing: '5px', margin: 0, fontWeight: '500' }}>
-          CRAFTING THE EXPERIENCE
-        </h1>
-        <p style={{ color: '#535353ff', fontSize: '0.55rem', letterSpacing: '3.3px', marginTop: '10px' }}>
-          A NEW DIGITAL SPACE IS UNDER DESIGN
-        </p>
-      </div>
-
-      <Canvas camera={{ position: [0, 0, 6], fov: 45 }}>
-        <ambientLight intensity={0.5} />
-        <Environment preset="warehouse" />
-
-        <Float speed={1.5} rotationIntensity={0.2} floatIntensity={1}>
-          <InteractiveShape isMobile={isMobile} gyroData={gyroData} />
-        </Float>
-
-        <OrbitControls enabled={false} />
-      </Canvas>
+        Return Home
+      </button>
     </div>
   )
 }
 
-export default App
+export default function App() {
+  const [currentPage, setCurrentPage] = useState('home')
+  const [scrollProgress, setScrollProgress] = useState(0)
+  const [isHolding, setIsHolding] = useState(false)
+  const [mousePos, setMousePos] = useState({ x: 0.5, y: 0.5 })
+  const mainContainerRef = useRef(null)
+
+  // --- محاسبات رنگ (Color Interpolation) ---
+  const interpolateColor = (color1, color2, factor) => {
+    const c1 = parseInt(color1.slice(1), 16), c2 = parseInt(color2.slice(1), 16)
+    const r = Math.round(((c1 >> 16) & 255) + (((c2 >> 16) & 255) - ((c1 >> 16) & 255)) * factor)
+    const g = Math.round(((c1 >> 8) & 255) + (((c2 >> 8) & 255) - ((c1 >> 8) & 255)) * factor)
+    const b = Math.round((c1 & 255) + ((c2 & 255) - (c1 & 255)) * factor)
+    return `rgb(${r}, ${g}, ${b})`
+  }
+
+  // تغییر رنگ‌ها: زمینه از طوسی روشن به سرمه‌ای تیره، متن برعکس
+  const backgroundColor = interpolateColor("#f5f5f5", "#050a14", scrollProgress)
+  const textColor = interpolateColor("#050a14", "#ffffff", scrollProgress)
+  const objectColor = interpolateColor("#ffffffff", "#ebebebff", scrollProgress)
+  const glassBorderColor = interpolateColor("#000000", "#ffffff", scrollProgress)
+
+  // --- هندلر اسکرول ---
+  const handleScroll = (e) => {
+    const { scrollTop, scrollHeight, clientHeight } = e.target
+    const progress = Math.min(scrollTop / (scrollHeight - clientHeight), 1)
+    setScrollProgress(progress)
+  }
+
+  // --- هندلرهای موس ---
+  const handleDown = (e) => {
+    if (currentPage !== 'home') return
+    if (e.button !== 0 && e.type === 'mousedown') return 
+    setIsHolding(true)
+    updateMousePos(e)
+  }
+  const handleMove = (e) => { if (isHolding) updateMousePos(e) }
+  const handleUp = () => setIsHolding(false)
+  
+  const updateMousePos = (e) => {
+    const x = e.clientX || (e.touches && e.touches[0].clientX)
+    const y = e.clientY || (e.touches && e.touches[0].clientY)
+    if (x !== undefined) setMousePos({ x: x / window.innerWidth, y: y / window.innerHeight })
+  }
+
+  const handleTransitionComplete = () => {
+    setIsHolding(false)
+    setCurrentPage('newWorld')
+  }
+
+  if (currentPage === 'newWorld') return <NewWorldPage onBack={() => setCurrentPage('home')} />
+
+  return (
+    <div 
+      ref={mainContainerRef}
+      onMouseDown={handleDown} onMouseUp={handleUp} onMouseMove={handleMove}
+      onTouchStart={handleDown} onTouchEnd={handleUp} onTouchMove={handleMove}
+      style={{ 
+        width: '100vw', height: '100vh', position: 'relative', overflow: 'hidden',
+        backgroundColor: backgroundColor, transition: 'background-color 0.1s linear',
+        userSelect: 'none', fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif'
+      }}
+    >
+      {/* لایه ۳ بعدی */}
+      <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', zIndex: 0 }}>
+        <Canvas eventSource={mainContainerRef} eventPrefix="client" camera={{ position: [0, 0, 5] }}>
+          <Scene objectColor={objectColor} />
+          <TransitionEffect isHolding={isHolding} mousePos={mousePos} onComplete={handleTransitionComplete} />
+        </Canvas>
+      </div>
+
+      {/* لایه محتوا (اسکرول) */}
+      <div 
+        onScroll={handleScroll}
+        style={{
+          position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', 
+          zIndex: 10, overflowY: 'auto', scrollBehavior: 'smooth', pointerEvents: 'none' 
+        }}
+      >
+        <div style={{ maxWidth: '800px', margin: '0 auto', padding: '0 24px', color: textColor, transition: 'color 0.2s' }}>
+          
+          {/* SECTION 1: Intro */}
+          <section style={{ height: '100vh', display: 'flex', flexDirection: 'column', justifyContent: 'center', pointerEvents: 'auto' }}>
+            <span style={{ fontSize: '0.8rem', letterSpacing: '4px', opacity: 0.6, marginBottom: '1rem', textTransform: 'uppercase' }}>
+              Architecture & Code
+            </span>
+            <h1 style={{ fontSize: '3.5rem', fontWeight: '300', margin: 0, lineHeight: 1.1, letterSpacing: '-1px' }}>
+              Minimal<br/>Perspectives.
+            </h1>
+            <p style={{ fontSize: '1rem', marginTop: '2rem', maxWidth: '300px', fontWeight: '300', lineHeight: '1.6', opacity: 0.8 }}>
+              Exploring the boundaries between digital interfaces and organic motion. Hold click to transcend.
+            </p>
+          </section>
+
+          {/* SECTION 2: Text Content */}
+          <section style={{ padding: '100px 0', pointerEvents: 'auto', textAlign: 'justify' }}>
+            <h2 style={{ fontSize: '1.8rem', fontWeight: '300', marginBottom: '40px' }}>The Concept</h2>
+            <p style={{ fontSize: '1rem', lineHeight: '1.8', fontWeight: '300', marginBottom: '30px', opacity: 0.9 }}>
+              Minimalism is not defined by what is not there but by the perfectness of what is left. In our digital journey, we strip away the unnecessary noise to reveal the core structure of interaction. The object you see floating is a representation of this core—fluid, reactive, and ever-changing based on your perspective.
+            </p>
+            <p style={{ fontSize: '1rem', lineHeight: '1.8', fontWeight: '300', opacity: 0.9 }}>
+              We believe in "Invisible Design". Design that works so well you don't even notice it's there. It's about the feeling, the motion, and the subtle feedback loops that create an immersive experience without shouting for attention.
+            </p>
+          </section>
+
+          {/* SECTION 3: Services / Details */}
+          <section style={{ padding: '100px 0', pointerEvents: 'auto' }}>
+             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '40px' }}>
+                <div>
+                  <h3 style={{ fontSize: '1.2rem', fontWeight: '400', marginBottom: '15px' }}>Fluid Dynamics</h3>
+                  <p style={{ fontSize: '0.9rem', opacity: 0.7, lineHeight: '1.6' }}>
+                    Implementing real-time physics and WebGL shaders to create organic movement that responds to user input naturally.
+                  </p>
+                </div>
+                <div>
+                  <h3 style={{ fontSize: '1.2rem', fontWeight: '400', marginBottom: '15px' }}>Interaction</h3>
+                  <p style={{ fontSize: '0.9rem', opacity: 0.7, lineHeight: '1.6' }}>
+                    Bridging the gap between static content and dynamic storytelling through scroll-driven animations and gesture control.
+                  </p>
+                </div>
+             </div>
+          </section>
+
+           {/* SECTION 4: More Text to increase height */}
+           <section style={{ padding: '100px 0', pointerEvents: 'auto', textAlign: 'left' }}>
+            <h2 style={{ fontSize: '1.8rem', fontWeight: '300', marginBottom: '40px' }}>Methodology</h2>
+            <p style={{ fontSize: '1rem', lineHeight: '1.8', fontWeight: '300', opacity: 0.9 }}>
+              Our process is iterative and recursive. We start with a raw idea, refine it through code, test the emotional response, and refine again. It's not just about pixels on a screen; it's about how those pixels make you feel. The transition from light to dark represents the depth of focus required to solve complex problems.
+            </p>
+          </section>
+
+          {/* SECTION 5: Portfolio / Glass Cards (بازگشت المان‌های شیشه‌ای) */}
+          <section style={{ minHeight: '100vh', paddingTop: '100px', pointerEvents: 'auto' }}>
+             <h2 style={{ fontSize: '2rem', fontWeight: '200', textAlign: 'center', marginBottom: '80px', letterSpacing: '2px' }}>
+               SELECTED WORKS
+             </h2>
+             
+             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '30px' }}>
+                <GlassCard title="Project Aether" desc="WebGL Experience" borderColor={glassBorderColor} />
+                <GlassCard title="Neon Genesis" desc="UI Architecture" borderColor={glassBorderColor} />
+                <GlassCard title="Void Walker" desc="Interactive Art" borderColor={glassBorderColor} />
+                <GlassCard title="Mono Scale" desc="Minimal E-comm" borderColor={glassBorderColor} />
+             </div>
+
+             {/* دکمه شیشه‌ای بزرگ پایین صفحه */}
+             <div style={{ marginTop: '150px', display: 'flex', justifyContent: 'center', paddingBottom: '100px' }}>
+                <button style={{
+                  background: 'rgba(255, 255, 255, 0.05)',
+                  backdropFilter: 'blur(10px)',
+                  border: `1px solid ${scrollProgress > 0.5 ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.1)'}`, // تغییر رنگ بوردر بر اساس اسکرول
+                  padding: '20px 60px',
+                  borderRadius: '2px', // گوشه‌های تیز برای مینیمال بودن
+                  color: textColor,
+                  fontSize: '0.9rem',
+                  letterSpacing: '3px',
+                  textTransform: 'uppercase',
+                  cursor: 'pointer',
+                  transition: 'all 0.3s ease'
+                }}
+                onMouseEnter={(e) => {
+                   e.target.style.background = 'rgba(255, 255, 255, 0.1)'
+                   e.target.style.letterSpacing = '5px'
+                }}
+                onMouseLeave={(e) => {
+                   e.target.style.background = 'rgba(255, 255, 255, 0.05)'
+                   e.target.style.letterSpacing = '3px'
+                }}
+                >
+                  Initiate Contact
+                </button>
+             </div>
+          </section>
+
+        </div>
+      </div>
+
+      {/* راهنمای کوچک برای نگه داشتن کلیک */}
+      <div style={{
+        position: 'fixed', bottom: '10px', right: '10px', 
+        fontSize: '0.7rem', opacity: isHolding ? 1 : 0.5, 
+        letterSpacing: '2px', color: textColor, pointerEvents: 'none',
+        transition: 'opacity 0.3s'
+      }}>
+        {isHolding ? "CHARGING..." : "HOLD CLICK TO TRAVEL"}
+      </div>
+
+    </div>
+  )
+}
+
+// کامپوننت کارت شیشه‌ای
+function GlassCard({ title, desc, borderColor }) {
+  return (
+    <div style={{
+      background: 'rgba(255, 255, 255, 0.03)', // پس‌زمینه بسیار شفاف
+      backdropFilter: 'blur(10px)', // تاری پشت
+      border: '1px solid',
+      borderColor: borderColor, // رنگ خط دور داینامیک است اما با آلفا کم کنترل میشه در استایل پایین
+      borderWidth: '1px',
+      padding: '40px 30px',
+      display: 'flex',
+      flexDirection: 'column',
+      justifyContent: 'space-between',
+      height: '250px',
+      transition: 'transform 0.3s ease',
+      cursor: 'pointer',
+      borderColor: 'rgba(128, 128, 128, 0.2)' // رنگ ثابت ملایم برای بوردر
+    }}
+    onMouseEnter={(e) => {
+       e.currentTarget.style.transform = 'translateY(-10px)'
+       e.currentTarget.style.background = 'rgba(255, 255, 255, 0.08)'
+    }}
+    onMouseLeave={(e) => {
+       e.currentTarget.style.transform = 'translateY(0)'
+       e.currentTarget.style.background = 'rgba(255, 255, 255, 0.03)'
+    }}
+    >
+      <div style={{ width: '30px', height: '1px', background: 'currentColor', opacity: 0.5 }}></div>
+      <div>
+        <h3 style={{ fontSize: '1.4rem', fontWeight: '300', marginBottom: '10px' }}>{title}</h3>
+        <p style={{ fontSize: '0.8rem', opacity: 0.6, letterSpacing: '1px', textTransform: 'uppercase' }}>{desc}</p>
+      </div>
+    </div>
+  )
+}
