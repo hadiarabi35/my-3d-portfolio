@@ -1,15 +1,17 @@
-import React, { useRef } from 'react'
+import React, { useRef, useMemo } from 'react'
 import { useFrame, useThree, extend } from '@react-three/fiber'
 import { shaderMaterial, useTexture } from '@react-three/drei'
 import * as THREE from 'three'
 
-const PortalMaterial = shaderMaterial(
+const TrailPointMaterial = shaderMaterial(
   {
     uTime: 0,
     uTexture: null,
-    uMouse: new THREE.Vector2(0, 0),
     uProgress: 0,
-    uResolution: new THREE.Vector2(1, 1)
+    uResolution: new THREE.Vector2(1, 1),
+    uMouse: new THREE.Vector2(0.5, 0.5),
+    uAlpha: 1.0,
+    uRadius: 0.2
   },
   // Vertex Shader
   `
@@ -25,101 +27,98 @@ const PortalMaterial = shaderMaterial(
     uniform sampler2D uTexture;
     uniform vec2 uMouse;
     uniform float uProgress;
+    uniform float uAlpha;
+    uniform float uRadius;
     uniform vec2 uResolution;
     varying vec2 vUv;
 
-    vec3 permute(vec3 x) { return mod(((x*34.0)+1.0)*x, 289.0); }
-    float snoise(vec2 v){
-      const vec4 C = vec4(0.211324865405187, 0.366025403784439,
-               -0.577350269189626, 0.024390243902439);
-      vec2 i  = floor(v + dot(v, C.yy) );
-      vec2 x0 = v - i + dot(i, C.xx);
-      vec2 i1;
-      i1 = (x0.x > x0.y) ? vec2(1.0, 0.0) : vec2(0.0, 1.0);
-      vec4 x12 = x0.xyxy + C.xxzz;
-      x12.xy -= i1;
-      i = mod(i, 289.0);
-      vec3 p = permute( permute( i.y + vec3(0.0, i1.y, 1.0 ))
-      + i.x + vec3(0.0, i1.x, 1.0 ));
-      vec3 m = max(0.5 - vec3(dot(x0,x0), dot(x12.xy,x12.xy), dot(x12.zw,x12.zw)), 0.0);
-      m = m*m ;
-      m = m*m ;
-      vec3 x = 2.0 * fract(p * C.www) - 1.0;
-      vec3 h = abs(x) - 0.5;
-      vec3 ox = floor(x + 0.5);
-      vec3 a0 = x - ox;
-      m *= 1.79284291400159 - 0.85373472095314 * ( a0*a0 + h*h );
-      vec3 g;
-      g.x  = a0.x  * x0.x  + h.x  * x0.y;
-      g.yz = a0.yz * x12.xz + h.yz * x12.yw;
-      return 130.0 * dot(m, g);
+    // نویز برای حالت آبرنگی
+    float rand(vec2 n) { return fract(sin(dot(n, vec2(12.9898, 4.1414))) * 43758.5453); }
+    float noise(vec2 n) {
+      const vec2 d = vec2(0.0, 1.0);
+      vec2 b = floor(n), f = smoothstep(vec2(0.0), vec2(1.0), fract(n));
+      return mix(mix(rand(b), rand(b + d.yx), f.x), mix(rand(b + d.xy), rand(b + d.yy), f.x), f.y);
     }
 
     void main() {
       vec2 st = vUv;
       float aspect = uResolution.x / uResolution.y;
       st.x *= aspect;
-      vec2 mouse = uMouse;
-      mouse.x *= aspect;
+      vec2 m = uMouse;
+      m.x *= aspect;
 
-      float dist = distance(st, mouse);
-      float noise = snoise(st * 20.0 + uTime * 3.0) * 0.03; 
-      float radius = uProgress * 1.0;
-      float alpha = 1.0 - smoothstep(radius, radius + 0.05, dist + noise);
-
-      vec4 texColor = texture2D(uTexture, vUv);
-      gl_FragColor = vec4(texColor.rgb, alpha);
+      float d = distance(st, m);
+      float n = noise(st * 10.0 + uTime);
+      
+      // ایجاد شکل نامنظم قلمو
+      float mask = smoothstep(uRadius + n * 0.1, uRadius * 0.1, d);
+      
+      vec4 tex = texture2D(uTexture, vUv);
+      // اعمال شفافیت ذره (uAlpha)
+      gl_FragColor = vec4(tex.rgb, mask * uAlpha);
     }
   `
 )
 
-extend({ PortalMaterial })
+extend({ TrailPointMaterial })
 
 export default function TransitionEffect({ isHolding, mousePos, onComplete }) {
-  const ref = useRef()
-  const myPhoto = useTexture('./BG_PT.jpg') // مطمئن شو عکس در پوشه public باشد
   const { viewport, size } = useThree()
+  const myPhoto = useTexture('./BG_PT.jpg')
+  const pointsCount = 60 // تعداد نقاطی که رد قلمو را می‌سازند
+  const meshRefs = useRef([])
   const progress = useRef(0)
-  const triggered = useRef(false)
+
+  // ایجاد آرایه‌ای از اطلاعات برای هر نقطه (موقعیت و شفافیت)
+  const trailData = useMemo(() => 
+    Array.from({ length: pointsCount }).map(() => ({
+      x: 0, y: 0, age: 0, active: false
+    })), [])
 
   useFrame((state, delta) => {
-    if (!ref.current) return
-
-    // آپدیت مقادیر عمومی شیدر
-    ref.current.uTime = state.clock.elapsedTime
-    ref.current.uResolution.set(size.width, size.height)
-    ref.current.uMouse.set(mousePos.x, 1 - mousePos.y)
-    
-    // 🎯 اصلاح اصلی: عکس باید همیشه به شیدر پاس داده شود
-    ref.current.uTexture = myPhoto
-
-    // مدیریت انیمیشن
-    if (isHolding) {
-      progress.current += delta * 0.4
-    } else {
-      progress.current -= delta * 2.0
-      triggered.current = false
-    }
-
+    // ۱. مدیریت پیشرفت کلی برای باز شدن کامل صفحه
+    if (isHolding) progress.current += delta * 0.5
+    else progress.current -= delta * 1.0
     progress.current = Math.max(0, Math.min(1.5, progress.current))
-    ref.current.uProgress = progress.current
 
-    // شرط اتمام و تغییر صفحه
-    if (progress.current >= 1.2 && isHolding && !triggered.current) {
-      triggered.current = true
-      if (onComplete) onComplete()
-    }
+    if (progress.current >= 1.2 && onComplete) onComplete()
+
+    // ۲. منطق رد قلمو: اضافه کردن نقطه جدید در هر فریم
+    const oldestIdx = trailData.reduce((prev, curr, idx, arr) => 
+      curr.age > arr[prev].age ? idx : prev, 0)
+    
+    trailData[oldestIdx].x = mousePos.x
+    trailData[oldestIdx].y = 1 - mousePos.y
+    trailData[oldestIdx].age = 0
+    trailData[oldestIdx].active = true
+
+    // ۳. آپدیت کردن تمام نقاط
+    meshRefs.current.forEach((mesh, i) => {
+      if (mesh) {
+        const data = trailData[i]
+        data.age += delta * 0.5 // سرعت محو شدن رد قلمو
+        
+        const alpha = Math.max(0, 1 - data.age)
+        const scale = isHolding ? 1.5 + progress.current * 65 : 1.0 // بزرگ شدن با کلیک
+
+        mesh.material.uAlpha = alpha
+        mesh.material.uMouse.set(data.x, data.y)
+        mesh.material.uTime = state.clock.elapsedTime
+        mesh.material.uRadius = 0.05 * scale
+        mesh.material.uResolution.set(size.width, size.height)
+        mesh.material.uTexture = myPhoto
+      }
+    })
   })
 
   return (
-    <mesh renderOrder={1000} position={[0, 0, 0]}>
-      <planeGeometry args={[viewport.width, viewport.height]} />
-      <portalMaterial 
-        ref={ref} 
-        transparent={true} 
-        uTexture={myPhoto}
-        depthTest={false} 
-      /> 
-    </mesh>
+    <group renderOrder={1000}>
+      {trailData.map((_, i) => (
+        <mesh key={i} ref={el => meshRefs.current[i] = el}>
+          <planeGeometry args={[viewport.width, viewport.height]} />
+          <trailPointMaterial transparent={true} depthTest={false} />
+        </mesh>
+      ))}
+    </group>
   )
 }
