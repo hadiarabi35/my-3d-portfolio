@@ -99,7 +99,7 @@ export default function TransitionEffect({ isHolding, mousePos, onComplete }) {
         data.age += delta * 0.5 // سرعت محو شدن رد قلمو
         
         const alpha = Math.max(0, 1 - data.age)
-        const scale = isHolding ? 1.5 + progress.current * 65 : 1.0 // بزرگ شدن با کلیک
+        const scale = isHolding ? 1.5 + progress.current * 25 : 1.0 // بزرگ شدن با کلیک
 
         mesh.material.uAlpha = alpha
         mesh.material.uMouse.set(data.x, data.y)
