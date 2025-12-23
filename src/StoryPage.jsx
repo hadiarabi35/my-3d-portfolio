@@ -28,7 +28,7 @@ export default function StoryPage({ onScrollChange }) {
   const objectColor3D = useTransform(
     scrollYProgress,
     [0, 0.8],
-    ["#a0a0a0", "#00ff88"] // از طوسی به سبز نئونی (یا هر رنگ روشنی)
+    ["#a0a0a0", "#249750ff"] // از طوسی به سبز نئونی (یا هر رنگ روشنی)
   )
 
   // --- ارسال رنگ به سه بعدی ---

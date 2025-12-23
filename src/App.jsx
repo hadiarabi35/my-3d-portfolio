@@ -8,7 +8,7 @@ function NewWorldPage({ onBack }) {
   return (
     <div style={{ 
       width: '100vw', height: '100vh', 
-      background: '#000', color: '#fff', 
+      background: '#ffffffff', color: '#000000ff', 
       display: 'flex', flexDirection: 'column',
       alignItems: 'center', justifyContent: 'center',
       animation: 'fadeIn 1s ease', zIndex: 2000, position: 'relative',
@@ -18,8 +18,8 @@ function NewWorldPage({ onBack }) {
       <p style={{ marginTop: '20px', opacity: 0.7, fontWeight: '300' }}>Welcome to the next dimension.</p>
       <button onClick={onBack} style={{ 
         marginTop: '40px', padding: '12px 30px', 
-        background: 'transparent', border: '1px solid rgba(255,255,255,0.5)', 
-        color: 'white', cursor: 'pointer', borderRadius: '50px' 
+        background: 'transparent', border: '1px solid rgba(53, 53, 53, 0.5)', 
+        color: '#000000ff', cursor: 'pointer', borderRadius: '50px' 
       }}>
         Return Home
       </button>
@@ -56,20 +56,27 @@ export default function App() {
     setScrollProgress(progress)
   }
 
-  // --- هندلرهای موس ---
+// --- اصلاح هندلرهای موس برای قابلیت HOVER ---
   const handleDown = (e) => {
     if (currentPage !== 'home') return
     if (e.button !== 0 && e.type === 'mousedown') return 
     setIsHolding(true)
     updateMousePos(e)
   }
-  const handleMove = (e) => { if (isHolding) updateMousePos(e) }
+
+  // 🎯 اینجا شرط isHolding حذف شد تا دایره همیشه دنبال موس باشد
+  const handleMove = (e) => { 
+    updateMousePos(e) 
+  }
+
   const handleUp = () => setIsHolding(false)
   
   const updateMousePos = (e) => {
     const x = e.clientX || (e.touches && e.touches[0].clientX)
     const y = e.clientY || (e.touches && e.touches[0].clientY)
-    if (x !== undefined) setMousePos({ x: x / window.innerWidth, y: y / window.innerHeight })
+    if (x !== undefined) {
+      setMousePos({ x: x / window.innerWidth, y: y / window.innerHeight })
+    }
   }
 
   const handleTransitionComplete = () => {
@@ -302,8 +309,8 @@ export default function App() {
 function GlassCard({ title, desc, borderColor }) {
   return (
     <div style={{
-      background: 'rgba(255, 255, 255, 0.03)', // پس‌زمینه بسیار شفاف
-      backdropFilter: 'blur(10px)', // تاری پشت
+      background: 'rgba(255, 255, 255, 0)', // پس‌زمینه بسیار شفاف
+      backdropFilter: 'blur(3px)', // تاری پشت
       border: '1px solid',
       borderColor: borderColor, // رنگ خط دور داینامیک است اما با آلفا کم کنترل میشه در استایل پایین
       borderWidth: '1px',

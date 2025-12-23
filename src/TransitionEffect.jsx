@@ -1,12 +1,12 @@
 import React, { useRef } from 'react'
 import { useFrame, useThree, extend } from '@react-three/fiber'
-import { shaderMaterial } from '@react-three/drei'
+import { shaderMaterial, useTexture } from '@react-three/drei'
 import * as THREE from 'three'
 
 const PortalMaterial = shaderMaterial(
   {
     uTime: 0,
-    uColor: new THREE.Color('#e7e6e6ff'), 
+    uTexture: null,
     uMouse: new THREE.Vector2(0, 0),
     uProgress: 0,
     uResolution: new THREE.Vector2(1, 1)
@@ -22,7 +22,7 @@ const PortalMaterial = shaderMaterial(
   // Fragment Shader
   `
     uniform float uTime;
-    uniform vec3 uColor;
+    uniform sampler2D uTexture;
     uniform vec2 uMouse;
     uniform float uProgress;
     uniform vec2 uResolution;
@@ -63,17 +63,12 @@ const PortalMaterial = shaderMaterial(
       mouse.x *= aspect;
 
       float dist = distance(st, mouse);
-      
-      // ۱. نویز ظریف‌تر (ضریب ۰.۰۳) برای جلوگیری از پخش شدن زیاد در مرکز
       float noise = snoise(st * 20.0 + uTime * 3.0) * 0.03; 
-      
-      // ۲. شعاع بر اساس پیشرفت (Progress)
       float radius = uProgress * 1.0;
-
-      // ۳. لبه تیزتر (۰.۰۵ بجای ۰.۲) برای کوچک کردن نقطه شروع
       float alpha = 1.0 - smoothstep(radius, radius + 0.05, dist + noise);
 
-      gl_FragColor = vec4(uColor, alpha);
+      vec4 texColor = texture2D(uTexture, vUv);
+      gl_FragColor = vec4(texColor.rgb, alpha);
     }
   `
 )
@@ -82,30 +77,34 @@ extend({ PortalMaterial })
 
 export default function TransitionEffect({ isHolding, mousePos, onComplete }) {
   const ref = useRef()
+  const myPhoto = useTexture('./BG_PT.jpg') // مطمئن شو عکس در پوشه public باشد
   const { viewport, size } = useThree()
   const progress = useRef(0)
-  const triggered = useRef(false) // برای جلوگیری از اجرای چندباره onComplete
+  const triggered = useRef(false)
 
   useFrame((state, delta) => {
     if (!ref.current) return
 
+    // آپدیت مقادیر عمومی شیدر
     ref.current.uTime = state.clock.elapsedTime
-    ref.current.uResolution = new THREE.Vector2(size.width, size.height)
-    ref.current.uMouse = new THREE.Vector2(mousePos.x, 1 - mousePos.y)
+    ref.current.uResolution.set(size.width, size.height)
+    ref.current.uMouse.set(mousePos.x, 1 - mousePos.y)
+    
+    // 🎯 اصلاح اصلی: عکس باید همیشه به شیدر پاس داده شود
+    ref.current.uTexture = myPhoto
 
-    // انیمیشن نرم پر شدن و خالی شدن
+    // مدیریت انیمیشن
     if (isHolding) {
       progress.current += delta * 0.4
     } else {
       progress.current -= delta * 2.0
-      triggered.current = false // ریست کردن وضعیت وقتی دکمه رها می‌شود
+      triggered.current = false
     }
 
-    // محدود کردن مقدار بین ۰ و ۱.۵
     progress.current = Math.max(0, Math.min(1.5, progress.current))
     ref.current.uProgress = progress.current
 
-    // شرط انتقال به صفحه بعد
+    // شرط اتمام و تغییر صفحه
     if (progress.current >= 1.2 && isHolding && !triggered.current) {
       triggered.current = true
       if (onComplete) onComplete()
@@ -118,6 +117,7 @@ export default function TransitionEffect({ isHolding, mousePos, onComplete }) {
       <portalMaterial 
         ref={ref} 
         transparent={true} 
+        uTexture={myPhoto}
         depthTest={false} 
       /> 
     </mesh>
