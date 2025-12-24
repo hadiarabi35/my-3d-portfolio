@@ -32,7 +32,6 @@ const TrailPointMaterial = shaderMaterial(
     uniform vec2 uResolution;
     varying vec2 vUv;
 
-    // نویز برای حالت آبرنگی
     float rand(vec2 n) { return fract(sin(dot(n, vec2(12.9898, 4.1414))) * 43758.5453); }
     float noise(vec2 n) {
       const vec2 d = vec2(0.0, 1.0);
@@ -41,6 +40,18 @@ const TrailPointMaterial = shaderMaterial(
     }
 
     void main() {
+      // 🎯 اصلاح نسبت تصویر (Object-fit: Cover)
+      vec2 s = uResolution;
+      vec2 i = vec2(3000.0, 816.0); // ابعاد عکس خود را اینجا تنظیم کنید
+      float rs = s.x / s.y;
+      float ri = i.x / i.y;
+      vec2 newUv = vUv;
+      if (rs > ri) {
+          newUv.y = vUv.y * (rs / ri) - (rs / ri - 1.0) * 0.5;
+      } else {
+          newUv.x = vUv.x * (ri / rs) - (ri / rs - 1.0) * 0.5;
+      }
+
       vec2 st = vUv;
       float aspect = uResolution.x / uResolution.y;
       st.x *= aspect;
@@ -50,11 +61,9 @@ const TrailPointMaterial = shaderMaterial(
       float d = distance(st, m);
       float n = noise(st * 10.0 + uTime);
       
-      // ایجاد شکل نامنظم قلمو
       float mask = smoothstep(uRadius + n * 0.1, uRadius * 0.1, d);
       
-      vec4 tex = texture2D(uTexture, vUv);
-      // اعمال شفافیت ذره (uAlpha)
+      vec4 tex = texture2D(uTexture, newUv);
       gl_FragColor = vec4(tex.rgb, mask * uAlpha);
     }
   `
@@ -65,25 +74,31 @@ extend({ TrailPointMaterial })
 export default function TransitionEffect({ isHolding, mousePos, onComplete }) {
   const { viewport, size } = useThree()
   const myPhoto = useTexture('./BG_PT.jpg')
-  const pointsCount = 60 // تعداد نقاطی که رد قلمو را می‌سازند
+  
+  // 🎯 تنظیمات Clamping برای جلوگیری از کشیدگی لبه‌ها
+  myPhoto.wrapS = THREE.ClampToEdgeWrapping
+  myPhoto.wrapT = THREE.ClampToEdgeWrapping
+
+  const isMobile = size.width < 768 // تشخیص موبایل
+  const pointsCount = 60 
   const meshRefs = useRef([])
   const progress = useRef(0)
 
-  // ایجاد آرایه‌ای از اطلاعات برای هر نقطه (موقعیت و شفافیت)
   const trailData = useMemo(() => 
     Array.from({ length: pointsCount }).map(() => ({
       x: 0, y: 0, age: 0, active: false
     })), [])
 
   useFrame((state, delta) => {
-    // ۱. مدیریت پیشرفت کلی برای باز شدن کامل صفحه
-    if (isHolding) progress.current += delta * 0.5
+    // ۱. مدیریت پیشرفت کلی (با حفظ تنظیمات شما + تفکیک موبایل)
+    const progressSpeed = isMobile ? 0.2 : 0.5
+    if (isHolding) progress.current += delta * progressSpeed
     else progress.current -= delta * 1.0
     progress.current = Math.max(0, Math.min(1.5, progress.current))
 
     if (progress.current >= 1.2 && onComplete) onComplete()
 
-    // ۲. منطق رد قلمو: اضافه کردن نقطه جدید در هر فریم
+    // ۲. منطق رد قلمو
     const oldestIdx = trailData.reduce((prev, curr, idx, arr) => 
       curr.age > arr[prev].age ? idx : prev, 0)
     
@@ -96,15 +111,18 @@ export default function TransitionEffect({ isHolding, mousePos, onComplete }) {
     meshRefs.current.forEach((mesh, i) => {
       if (mesh) {
         const data = trailData[i]
-        data.age += delta * 0.5 // سرعت محو شدن رد قلمو
+        data.age += delta * 0.5 
         
         const alpha = Math.max(0, 1 - data.age)
-        const scale = isHolding ? 1.5 + progress.current * 25 : 1.0 // بزرگ شدن با کلیک
+        
+        // 🎯 تنظیم شعاع و مقیاس (حفظ عدد ۶۵ شما برای دسکتاپ)
+        const baseRadius = isMobile ? 0.02 : 0.05
+        const scale = isHolding ? 1.5 + progress.current * 65 : 1.0 
 
         mesh.material.uAlpha = alpha
         mesh.material.uMouse.set(data.x, data.y)
         mesh.material.uTime = state.clock.elapsedTime
-        mesh.material.uRadius = 0.05 * scale
+        mesh.material.uRadius = baseRadius * scale
         mesh.material.uResolution.set(size.width, size.height)
         mesh.material.uTexture = myPhoto
       }
